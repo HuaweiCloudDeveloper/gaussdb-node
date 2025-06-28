@@ -1,6 +1,6 @@
 {
   "name": "gaussdb-pool",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Connection pool for GaussDB",
   "main": "index.js",
   "exports": {

@@ -1,6 +1,6 @@
 {
   "name": "gaussdb-esm-test",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A test module for GaussDB with ESM support",
   "main": "index.js",
   "type": "module",
@@ -13,13 +13,13 @@
     "test"
   ],
   "devDependencies": {
-    "gaussdb": "^0.1.0",
-    "gaussdb-cloudflare": "^0.1.0",
-    "gaussdb-cursor": "^0.1.0",
-    "pg-native": "^3.5.0",
-    "gaussdb-pool": "^0.1.0",
-    "gaussdb-protocol": "^0.1.0",
-    "gaussdb-query-stream": "^0.1.0"
+    "gaussdb": "^0.1.1",
+    "gaussdb-cloudflare": "^0.1.1",
+    "gaussdb-cursor": "^0.1.1",
+    "gaussdb-pool": "^0.1.1",
+    "gaussdb-protocol": "^0.1.1",
+    "gaussdb-query-stream": "^0.1.1",
+    "pg-native": "^3.5.0"
   },
   "author": "Brian M. Carlson <brian.m.carlson@gmail.com>",
   "license": "MIT"

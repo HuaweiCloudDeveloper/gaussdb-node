@@ -1,6 +1,6 @@
 {
   "name": "gaussdb-cursor",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Query cursor extension for GaussDB",
   "main": "index.js",
   "exports": {
@@ -24,8 +24,8 @@
   "author": "Brian M. Carlson",
   "license": "MIT",
   "devDependencies": {
-    "mocha": "^10.5.2",
-    "gaussdb": "^0.1.0"
+    "gaussdb": "^0.1.1",
+    "mocha": "^10.5.2"
   },
   "peerDependencies": {
     "gaussdb": "^0.1.0"
