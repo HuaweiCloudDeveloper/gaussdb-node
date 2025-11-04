@@ -25,17 +25,17 @@ helper('error', function (client) {
 
 // SKIP: 不支持 LISTEN/NOFITY statement
 // https://github.com/HuaweiCloudDeveloper/gaussdb-drivers/blob/master-dev/diff-gaussdb-postgres.md#%E4%B8%8D%E6%94%AF%E6%8C%81-listennofity-statement
-describe.skip('error recovery', () => {
+describe('error recovery', () => {
   // created from https://github.com/chrisdickinson/pg-test-case
   it('recovers from a streaming error in a transaction', async () => {
     const pool = new Pool()
     const client = await pool.connect()
     await client.query(`CREATE TEMP TABLE frobnicators (
-      id serial primary key,
+      id INTEGER PRIMARY KEY,
       updated timestamp
     )`)
     await client.query(`BEGIN;`)
-    const query = new QueryStream(`INSERT INTO frobnicators ("updated") VALUES ($1) RETURNING "id"`, [Date.now()])
+    const query = new QueryStream(`INSERT INTO frobnicators (id, updated) VALUES ($1, $2) RETURNING "id"`, [1, Date.now()])
     let error: Error | undefined = undefined
     query.on('data', console.log).on('error', (e) => {
       error = e
@@ -106,7 +106,7 @@ describe.skip('error recovery', () => {
 
     await stream.destroy()
     await client.release()
-
+    await new Promise((resolve) => setTimeout(resolve, 1000))
     const res2 = await pool.query('SELECT 4 AS d')
     assert.deepStrictEqual(res2.rows, [{ d: 4 }])
 
