@@ -23,8 +23,6 @@ helper('error', function (client) {
   })
 })
 
-// SKIP: 不支持 LISTEN/NOFITY statement
-// https://github.com/HuaweiCloudDeveloper/gaussdb-drivers/blob/master-dev/diff-gaussdb-postgres.md#%E4%B8%8D%E6%94%AF%E6%8C%81-listennofity-statement
 describe('error recovery', () => {
   // created from https://github.com/chrisdickinson/pg-test-case
   it('recovers from a streaming error in a transaction', async () => {
@@ -35,7 +33,10 @@ describe('error recovery', () => {
       updated timestamp
     )`)
     await client.query(`BEGIN;`)
-    const query = new QueryStream(`INSERT INTO frobnicators (id, updated) VALUES ($1, $2) RETURNING "id"`, [1, Date.now()])
+    const query = new QueryStream(`INSERT INTO frobnicators (id, updated) VALUES ($1, $2) RETURNING "id"`, [
+      1,
+      Date.now(),
+    ])
     let error: Error | undefined = undefined
     query.on('data', console.log).on('error', (e) => {
       error = e

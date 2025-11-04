@@ -67,14 +67,12 @@ test('prepared statements do not mutate params', function () {
   })
 })
 
-// SKIP: 不支持 临时表Serial
-// https://github.com/HuaweiCloudDeveloper/gaussdb-drivers/blob/master-dev/diff-gaussdb-postgres.md#%E4%B8%8D%E6%94%AF%E6%8C%81-%E4%B8%B4%E6%97%B6%E8%A1%A8serial
-
-/*
 test('multiple simple queries', function () {
   const client = helper.client()
-  client.query({ text: "create temp table bang(id serial, name varchar(5));insert into bang(name) VALUES('boom');" })
-  client.query("insert into bang(name) VALUES ('yes');")
+  client.query({
+    text: "create temp table bang(id integer, name varchar(5));insert into bang(id, name) VALUES(1, 'boom');",
+  })
+  client.query("insert into bang(id, name) VALUES (2, 'yes');")
   const query = client.query(new Query('select name from bang'))
   assert.emits(query, 'row', function (row) {
     assert.equal(row['name'], 'boom')
@@ -84,7 +82,6 @@ test('multiple simple queries', function () {
   })
   client.on('drain', client.end.bind(client))
 })
-*/
 
 test('multiple select statements', function () {
   const client = helper.client()

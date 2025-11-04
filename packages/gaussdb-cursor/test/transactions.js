@@ -2,14 +2,12 @@ const assert = require('assert')
 const Cursor = require('../')
 const gaussdb = require('gaussdb-node')
 
-// SKIP: 不支持 LISTEN/NOFITY statement
-// https://github.com/HuaweiCloudDeveloper/gaussdb-drivers/blob/master-dev/diff-gaussdb-postgres.md#%E4%B8%8D%E6%94%AF%E6%8C%81-listennofity-statement
-describe.skip('transactions', () => {
+describe('transactions', () => {
   it('can execute multiple statements in a transaction', async () => {
     const client = new gaussdb.Client()
     await client.connect()
     await client.query('begin')
-    await client.query('CREATE TEMP TABLE foobar(id SERIAL PRIMARY KEY)')
+    await client.query('CREATE TEMP TABLE foobar(id INTEGER PRIMARY KEY)')
     const cursor = client.query(new Cursor('SELECT * FROM foobar'))
     const rows = await new Promise((resolve, reject) => {
       cursor.read(10, (err, rows) => (err ? reject(err) : resolve(rows)))
@@ -23,7 +21,7 @@ describe.skip('transactions', () => {
     const client = new gaussdb.Client()
     await client.connect()
     await client.query('begin')
-    await client.query('CREATE TEMP TABLE foobar(id SERIAL PRIMARY KEY)')
+    await client.query('CREATE TEMP TABLE foobar(id INTEGER PRIMARY KEY)')
     const cursor = client.query(new Cursor('SELECT * FROM foobar'))
     await new Promise((resolve) => cursor.close(resolve))
     await client.query('ALTER TABLE foobar ADD COLUMN name TEXT')
@@ -35,7 +33,7 @@ describe.skip('transactions', () => {
     await client.connect()
     await client.query('begin')
     // create a cursor that has no data response
-    const createText = 'CREATE TEMP TABLE foobar(id SERIAL PRIMARY KEY)'
+    const createText = 'CREATE TEMP TABLE foobar(id INTEGER PRIMARY KEY)'
     const cursor = client.query(new Cursor(createText))
     const err = await new Promise((resolve) => cursor.read(100, resolve))
     assert.ifError(err)
