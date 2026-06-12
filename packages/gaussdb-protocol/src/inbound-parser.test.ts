@@ -573,4 +573,173 @@ describe('GaussDBPacketStream', function () {
       })
     })
   })
+
+  // ──────────────────────────────────────────────
+  // Binary format DataRow parsing (commit c7014f63..HEAD)
+  // ──────────────────────────────────────────────
+  describe('binary format DataRow', function () {
+    it('parses data row with binary format field as Buffer', async function () {
+      // Create a RowDescription with formatCode=1 (binary) for a single field
+      const binaryField = {
+        name: 'bin_col',
+        tableID: 0,
+        attributeNumber: 0,
+        dataTypeID: 17, // bytea
+        dataTypeSize: -1,
+        typeModifier: 0,
+        formatCode: 1, // binary
+      }
+      const rowDescBuf = buffers.rowDescription([binaryField])
+
+      // Create a DataRow with raw bytes (not text)
+      const rawBytes = Buffer.from([0x01, 0x02, 0x03, 0x04])
+      const dataRowBuf = new BufferList()
+        .addInt16(1) // field count
+        .addInt32(rawBytes.length)
+        .add(rawBytes)
+        .join(true, 'D')
+
+      const messages = await parseBuffers([rowDescBuf, dataRowBuf])
+      assert.strictEqual(messages.length, 2)
+      const rowDesc = messages[0] as any
+      const dataRow = messages[1] as any
+      assert.strictEqual(rowDesc.name, 'rowDescription')
+      assert.strictEqual(rowDesc.fields[0].format, 'binary')
+      assert.strictEqual(dataRow.name, 'dataRow')
+      assert.ok(Buffer.isBuffer(dataRow.fields[0]), 'binary field should be Buffer')
+      assert.deepStrictEqual(dataRow.fields[0], rawBytes)
+    })
+
+    it('parses mixed text and binary fields', async function () {
+      const fields = [
+        {
+          name: 'text_col',
+          tableID: 0,
+          attributeNumber: 0,
+          dataTypeID: 25, // text
+          dataTypeSize: -1,
+          typeModifier: 0,
+          formatCode: 0, // text
+        },
+        {
+          name: 'bin_col',
+          tableID: 0,
+          attributeNumber: 1,
+          dataTypeID: 17, // bytea
+          dataTypeSize: -1,
+          typeModifier: 0,
+          formatCode: 1, // binary
+        },
+      ]
+      const rowDescBuf = buffers.rowDescription(fields)
+
+      const rawBytes = Buffer.from([0xde, 0xad, 0xbe, 0xef])
+      const dataRowBuf = new BufferList()
+        .addInt16(2) // field count
+        .addInt32(5).add(Buffer.from('hello')) // text field
+        .addInt32(rawBytes.length).add(rawBytes) // binary field
+        .join(true, 'D')
+
+      const messages = await parseBuffers([rowDescBuf, dataRowBuf])
+      const dataRow = messages[1] as any
+      assert.strictEqual(dataRow.fields[0], 'hello', 'text field should be string')
+      assert.ok(Buffer.isBuffer(dataRow.fields[1]), 'binary field should be Buffer')
+      assert.deepStrictEqual(dataRow.fields[1], rawBytes)
+    })
+
+    it('binary field with null value returns null', async function () {
+      const binaryField = {
+        name: 'bin_col',
+        tableID: 0,
+        attributeNumber: 0,
+        dataTypeID: 17,
+        dataTypeSize: -1,
+        typeModifier: 0,
+        formatCode: 1,
+      }
+      const rowDescBuf = buffers.rowDescription([binaryField])
+
+      const dataRowBuf = new BufferList()
+        .addInt16(1)
+        .addInt32(-1) // null
+        .join(true, 'D')
+
+      const messages = await parseBuffers([rowDescBuf, dataRowBuf])
+      const dataRow = messages[1] as any
+      assert.strictEqual(dataRow.fields[0], null)
+    })
+  })
+
+  // ──────────────────────────────────────────────
+  // authType=10 SASL/SHA256 distinction (commit c7014f63..HEAD)
+  // ──────────────────────────────────────────────
+  describe('authType=10 SASL vs SHA256 distinction', function () {
+    it('parses SASL when first byte is printable ASCII', async function () {
+      // SASL: authType=10 + printable ASCII mechanism name
+      const saslBuf = new BufferList()
+        .addInt32(10) // authType
+        .addCString('SCRAM-SHA-256')
+        .addCString('') // terminator
+        .join(true, 'R')
+
+      const messages = await parseBuffers([saslBuf])
+      const msg = messages[0] as any
+      assert.strictEqual(msg.name, 'authenticationSASL')
+      assert.ok(Array.isArray(msg.mechanisms))
+      assert.strictEqual(msg.mechanisms[0], 'SCRAM-SHA-256')
+    })
+
+    it('parses SHA256 when first byte is non-printable', async function () {
+      // GaussDB SHA256: authType=10 + raw binary data (non-printable first byte)
+      // Structure: [4 bytes method][64 bytes random code][8 bytes token][4 bytes iteration]
+      const shaData = Buffer.alloc(80)
+      shaData.writeInt32BE(0, 0) // method = 0 (non-printable byte)
+      shaData.write('A'.repeat(64), 4, 'ascii')
+      shaData.write('B'.repeat(8), 68, 'ascii')
+      shaData.writeInt32BE(4096, 76)
+
+      const shaBuf = new BufferList()
+        .addInt32(10) // authType
+        .add(shaData)
+        .join(true, 'R')
+
+      const messages = await parseBuffers([shaBuf])
+      const msg = messages[0] as any
+      assert.strictEqual(msg.name, 'authenticationSHA256Password')
+      assert.ok(Buffer.isBuffer(msg.data))
+    })
+
+    it('parses SHA256 with multiple SASL-like mechanisms not confused', async function () {
+      // SASL with multiple mechanisms
+      const saslBuf = new BufferList()
+        .addInt32(10)
+        .addCString('SCRAM-SHA-256')
+        .addCString('SCRAM-SHA-256-PLUS')
+        .addCString('')
+        .join(true, 'R')
+
+      const messages = await parseBuffers([saslBuf])
+      const msg = messages[0] as any
+      assert.strictEqual(msg.name, 'authenticationSASL')
+      assert.deepStrictEqual(msg.mechanisms, ['SCRAM-SHA-256', 'SCRAM-SHA-256-PLUS'])
+    })
+
+    it('parses SHA256 with all-zero method byte', async function () {
+      // Edge case: method byte is 0x00 (definitely not printable)
+      const shaData = Buffer.alloc(80)
+      // all zeros by default — method=0, rest filled with zeros
+      shaData.write('C'.repeat(64), 4, 'ascii')
+      shaData.write('D'.repeat(8), 68, 'ascii')
+      shaData.writeInt32BE(2048, 76)
+
+      const shaBuf = new BufferList()
+        .addInt32(10)
+        .add(shaData)
+        .join(true, 'R')
+
+      const messages = await parseBuffers([shaBuf])
+      const msg = messages[0] as any
+      assert.strictEqual(msg.name, 'authenticationSHA256Password')
+    })
+  })
 })

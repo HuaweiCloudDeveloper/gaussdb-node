@@ -91,6 +91,13 @@ module.exports = {
 }
 
 const pgTypes = require('pg-types')
+const gaussdbTypeParsers = require('./gaussdb-types')
+
+//Register GaussDB-specific type parsers
+gaussdbTypeParsers.init(function (oid, converter) {
+  pgTypes.setTypeParser(oid, 'text', converter)
+})
+
 // save default parsers
 const parseBigInteger = pgTypes.getTypeParser(20, 'text')
 const parseBigIntegerArray = pgTypes.getTypeParser(1016, 'text')

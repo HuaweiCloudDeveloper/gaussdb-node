@@ -82,6 +82,7 @@ export class Parser {
   private bufferOffset: number = 0
   private reader = new BufferReader()
   private mode: Mode
+  private _fieldFormats: ('text' | 'binary')[] = []
 
   constructor(opts?: StreamOptions) {
     if (opts?.mode === 'binary') {
@@ -252,8 +253,11 @@ export class Parser {
     this.reader.setBuffer(offset, bytes)
     const fieldCount = this.reader.int16()
     const message = new RowDescriptionMessage(length, fieldCount)
+    this._fieldFormats = []
     for (let i = 0; i < fieldCount; i++) {
-      message.fields[i] = this.parseField()
+      const field = this.parseField()
+      message.fields[i] = field
+      this._fieldFormats.push(field.format)
     }
     return message
   }
@@ -286,7 +290,12 @@ export class Parser {
     for (let i = 0; i < fieldCount; i++) {
       const len = this.reader.int32()
       // a -1 for length means the value of the field is null
-      fields[i] = len === -1 ? null : this.reader.string(len)
+      if (len === -1) {
+        fields[i] = null
+      } else {
+        const format = this._fieldFormats[i] || 'text'
+        fields[i] = format === 'binary' ? this.reader.bytes(len) : this.reader.string(len)
+      }      
     }
     return new DataRowMessage(length, fields)
   }
@@ -328,23 +337,28 @@ export class Parser {
           return new AuthenticationMD5Password(length, salt)
         }
         break
-      // case 10: // AuthenticationSASL
-      //   {
-      //     message.name = 'authenticationSASL'
-      //     message.mechanisms = []
-      //     let mechanism: string
-      //     do {
-      //       mechanism = this.reader.cstring()
-      //       if (mechanism) {
-      //         message.mechanisms.push(mechanism)
-      //       }
-      //     } while (mechanism)
-      //   }
-      //   break
-      case 10: // AuthenticationSHA256Password
+      // case 10: // AuthenticationSASL or AuthenticationSHA256Password
+      // GaussDB uses authType=10 for SHA256 authentication
+      // Postgres uses authType=10 for SASL/SCRAM authentication
+      // Distinguish by checking if the first byte after authType is printable ASCII
+      case 10: 
         {
-          message.name = 'authenticationSHA256Password'
-          message.data = this.reader.bytes(length - 8)
+          const peekByte = this.reader.peekByte() 
+          if (peekByte >= 0x20 && peekByte <= 0x7e) {
+            message.name = 'authenticationSASL'
+            message.mechanisms = []
+            let mechanism: string
+            do {
+              mechanism = this.reader.cstring()
+              if (mechanism) {
+                message.mechanisms.push(mechanism)
+              }
+            } while (mechanism)
+          } else {
+            //GaussDB SHA256: raw bytes (method +random_code + token +iteration)
+            message.name = 'authenticationSHA256Password'
+            message.data = this.reader.bytes(length - 8)
+          }
         }
         break
       case 11: // AuthenticationSASLContinue

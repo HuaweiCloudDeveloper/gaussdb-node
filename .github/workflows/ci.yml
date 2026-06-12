@@ -83,7 +83,7 @@ jobs:
           CONTAINER_ID=$(docker ps --filter "ancestor=opengauss/opengauss" --format "{{.ID}}")
           docker exec $CONTAINER_ID su - omm -c "gs_guc set -D /var/lib/opengauss/data/ -c 'password_encryption_type = 2'"
           
-          # Add SHA256 authentication rule to pg_hba.conf
+          # Add SHA256 authentication rule to gs_hba.conf
           docker exec $CONTAINER_ID su - omm -c "gs_guc set -D /var/lib/opengauss/data/ -h 'host all sha256_test 0.0.0.0/0 sha256'"
           docker exec $CONTAINER_ID su - omm -c "gs_ctl reload -D /var/lib/opengauss/data/"
           sleep 5

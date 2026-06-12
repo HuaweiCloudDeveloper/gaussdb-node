@@ -28,6 +28,7 @@ const GAUSSDB = function (clientConstructor) {
   this._pools = []
   this.Connection = Connection
   this.types = require('pg-types')
+  this.gaussdbTypes = require('./gaussdb-types').builtins
   this.DatabaseError = DatabaseError
   this.TypeOverrides = TypeOverrides
   this.LogicalReplicationService = LogicalReplicationService

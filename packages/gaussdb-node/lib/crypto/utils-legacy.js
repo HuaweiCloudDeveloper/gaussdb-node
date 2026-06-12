@@ -3,6 +3,7 @@
 // which does not support the WebCrypto.subtle API.
 
 const nodeCrypto = require('crypto')
+const { RFC5802Algorithm } = require('./rfc5802')
 
 function md5(string) {
   return nodeCrypto.createHash('md5').update(string, 'utf-8').digest('hex')
@@ -15,17 +16,27 @@ function gaussdbMd5PasswordHash(user, password, salt) {
   return 'md5' + outer
 }
 
-// See AuthenticationSHA256Password (based on similar approach to MD5)
-function gaussdbSha256PasswordHash(user, password, salt) {
-  const inner = nodeCrypto
-    .createHash('sha256')
-    .update(password + user, 'utf-8')
-    .digest('hex')
-  const outer = nodeCrypto
-    .createHash('sha256')
-    .update(Buffer.concat([Buffer.from(inner), salt]))
-    .digest('hex')
-  return 'sha256' + outer
+// GaussDB SHA256 authentication
+function gaussdbSha256PasswordHash(user, password, data) {
+  const PASSWORD_METHOD_OFFSET = 0
+  const PASSWORD_METHOD_SIZE = 4
+  const RANDOM_CODE_SIZE = 64
+  const TOKEN_SIZE = 8
+  const ITERATION_SIZE = 4
+
+  const dataBuffer = Buffer.from(data)
+  dataBuffer.readInt32BE(PASSWORD_METHOD_OFFSET)
+
+  const randomCode = dataBuffer.slice(PASSWORD_METHOD_SIZE, PASSWORD_METHOD_SIZE + RANDOM_CODE_SIZE).toString('ascii')
+
+  const tokenOffset = PASSWORD_METHOD_SIZE + RANDOM_CODE_SIZE
+  const token = dataBuffer.slice(tokenOffset, tokenOffset + TOKEN_SIZE).toString('ascii')
+
+  const serverIteration = dataBuffer.readInt32BE(dataBuffer.length - ITERATION_SIZE)
+
+  const hashResult = RFC5802Algorithm(password, randomCode, token, '', serverIteration, 'sha256')
+
+  return Buffer.from(hashResult, 'hex').toString('ascii')
 }
 
 function sha256(text) {

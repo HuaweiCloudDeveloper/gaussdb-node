@@ -79,7 +79,7 @@ const parse = (query: ParseOpts): Buffer => {
   // normalize missing query names to allow for null
   const name = query.name || ''
   if (name.length > 63) {
-    console.error('Warning! Postgres only supports 63 characters for query names.')
+    console.error('Warning! GaussDB only supports 63 characters for query names.')
     console.error('You supplied %s (%s)', name, name.length)
     console.error('This can cause conflicts and silent errors executing queries')
   }
@@ -159,6 +159,7 @@ const bind = (config: BindOpts = {}): Buffer => {
   writer.add(paramWriter.flush())
 
   // format code
+  writer.addInt16(1)
   writer.addInt16(binary ? ParamType.BINARY : ParamType.STRING)
   return writer.flush(code.bind)
 }

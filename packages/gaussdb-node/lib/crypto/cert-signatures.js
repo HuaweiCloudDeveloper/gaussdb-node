@@ -114,7 +114,7 @@ function signatureAlgorithmHashFromCertificate(data, index) {
     // Ed448 -- still not in pg 17.2 (if supported, digest would be SHAKE256 x 64 bytes)
     case '1.3.101.111':
     case '1.3.101.113': // ph
-      throw x509Error('Ed448 certificate channel binding is not currently supported by Postgres')
+      throw x509Error('Ed448 certificate channel binding is not currently supported by GaussDB')
   }
   throw x509Error('unknown OID ' + oid, data)
 }

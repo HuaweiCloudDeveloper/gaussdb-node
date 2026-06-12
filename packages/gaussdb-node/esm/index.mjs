@@ -6,6 +6,7 @@ export const Client = gaussdb.Client
 export const Pool = gaussdb.Pool
 export const Connection = gaussdb.Connection
 export const types = gaussdb.types
+export const gaussdbTypes = gaussdb.gaussdbTypes
 export const Query = gaussdb.Query
 export const DatabaseError = gaussdb.DatabaseError
 export const escapeIdentifier = gaussdb.escapeIdentifier

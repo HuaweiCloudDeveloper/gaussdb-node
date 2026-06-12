@@ -15,7 +15,7 @@ const assert = require('assert')
  *     SET password_encryption = 'scram-sha-256';
  *     CREATE ROLE scram_test login password 'test4scram';
  *
- * Add the following entries to pg_hba.conf:
+ * Add the following entries to gs_hba.conf:
  *
  *     host   all   scram_test   ::1/128    scram-sha-256
  *     host   all    scram_test   0.0.0.0/0   scram-sha-256

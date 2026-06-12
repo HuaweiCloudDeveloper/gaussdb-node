@@ -144,7 +144,9 @@ class Cursor extends EventEmitter {
   handleReadyForQuery() {
     this._sendRows()
     this.state = 'done'
-    this.emit('end', this._result)
+    setImmediate(() => {
+      this.emit('end', this._result)
+    })
   }
 
   handleEmptyQuery() {
@@ -153,7 +155,7 @@ class Cursor extends EventEmitter {
 
   handleError(msg) {
     // If this cursor has already closed, don't try to handle the error.
-    if (this.state === 'done') return
+    if (this.state === 'done' || this.state === 'error') return
 
     // If we're in an initialized state we've never been submitted
     // and don't have a connection instance reference yet.
@@ -171,7 +173,9 @@ class Cursor extends EventEmitter {
     this._error = msg
     // satisfy any waiting callback
     if (this._cb) {
-      this._cb(msg)
+      const cb = this._rowDescription
+      this._cb = null
+      cb(msg)
     }
     // dispatch error to all waiting callbacks
     for (let i = 0; i < this._queue.length; i++) {
@@ -217,7 +221,7 @@ class Cursor extends EventEmitter {
       })
     }
 
-    if (!this.connection || this.state === 'done') {
+    if (!this.connection || this.state === 'done' || this.state === 'error') {
       setImmediate(cb)
       return promise
     }

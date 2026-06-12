@@ -131,3 +131,103 @@ suite.testAsync('legacy hmacSha256 function', async () => {
   assert(hmac instanceof Buffer)
   assert.strictEqual(hmac.length, 32) // SHA-256 HMAC produces 32-byte output
 })
+
+// ──────────────────────────────────────────────
+// Edge case tests for gaussdbSha256PasswordHash (commit 57874239/03acbad5)
+// ──────────────────────────────────────────────
+
+suite.testAsync('legacy gaussdbSha256PasswordHash: deterministic output', async () => {
+  const crypto = require('../../../lib/crypto/utils-legacy')
+
+  const password = 'mypassword'
+  const data = Buffer.alloc(80)
+  data.writeInt32BE(1, 0)
+  data.write('A'.repeat(64), 4, 'ascii')
+  data.write('B'.repeat(8), 68, 'ascii')
+  data.writeInt32BE(4096, 76)
+
+  const hash1 = crypto.gaussdbSha256PasswordHash('user1', password, data)
+  const hash2 = crypto.gaussdbSha256PasswordHash('user1', password, data)
+  assert.strictEqual(hash1, hash2, 'same inputs should produce same hash')
+})
+
+suite.testAsync('legacy gaussdbSha256PasswordHash: different iteration counts produce different hashes', async () => {
+  const crypto = require('../../../lib/crypto/utils-legacy')
+
+  const makeData = function (iteration) {
+    const data = Buffer.alloc(80)
+    data.writeInt32BE(1, 0)
+    data.write('A'.repeat(64), 4, 'ascii')
+    data.write('B'.repeat(8), 68, 'ascii')
+    data.writeInt32BE(iteration, 76)
+    return data
+  }
+
+  const hash1 = crypto.gaussdbSha256PasswordHash('user', 'pass', makeData(1000))
+  const hash2 = crypto.gaussdbSha256PasswordHash('user', 'pass', makeData(4096))
+  assert.notStrictEqual(hash1, hash2, 'different iterations should produce different hashes')
+})
+
+suite.testAsync('legacy gaussdbSha256PasswordHash: different random codes produce different hashes', async () => {
+  const crypto = require('../../../lib/crypto/utils-legacy')
+
+  const makeData = function (randomCode) {
+    const data = Buffer.alloc(80)
+    data.writeInt32BE(1, 0)
+    data.write(randomCode, 4, 'ascii')
+    data.write('B'.repeat(8), 68, 'ascii')
+    data.writeInt32BE(4096, 76)
+    return data
+  }
+
+  const hash1 = crypto.gaussdbSha256PasswordHash('user', 'pass', makeData('A'.repeat(64)))
+  const hash2 = crypto.gaussdbSha256PasswordHash('user', 'pass', makeData('C'.repeat(64)))
+  assert.notStrictEqual(hash1, hash2, 'different random codes should produce different hashes')
+})
+
+suite.testAsync('legacy gaussdbSha256PasswordHash: different tokens produce different hashes', async () => {
+  const crypto = require('../../../lib/crypto/utils-legacy')
+
+  const makeData = function (token) {
+    const data = Buffer.alloc(80)
+    data.writeInt32BE(1, 0)
+    data.write('A'.repeat(64), 4, 'ascii')
+    data.write(token, 68, 'ascii')
+    data.writeInt32BE(4096, 76)
+    return data
+  }
+
+  const hash1 = crypto.gaussdbSha256PasswordHash('user', 'pass', makeData('BBBBBBBB'))
+  const hash2 = crypto.gaussdbSha256PasswordHash('user', 'pass', makeData('CCCCCCCC'))
+  assert.notStrictEqual(hash1, hash2, 'different tokens should produce different hashes')
+})
+
+suite.testAsync('legacy gaussdbSha256PasswordHash: user parameter does not affect hash (RFC5802 ignores user)', async () => {
+  const crypto = require('../../../lib/crypto/utils-legacy')
+
+  const data = Buffer.alloc(80)
+  data.writeInt32BE(1, 0)
+  data.write('A'.repeat(64), 4, 'ascii')
+  data.write('B'.repeat(8), 68, 'ascii')
+  data.writeInt32BE(1000, 76)
+
+  // gaussdbSha256PasswordHash signature is (user, password, data)
+  // but the RFC5802 implementation only uses password, not user
+  const hash1 = crypto.gaussdbSha256PasswordHash('userA', 'pass', data)
+  const hash2 = crypto.gaussdbSha256PasswordHash('userB', 'pass', data)
+  assert.strictEqual(hash1, hash2, 'user parameter should not affect hash output')
+})
+
+suite.testAsync('legacy gaussdbSha256PasswordHash: result is ascii hex string', async () => {
+  const crypto = require('../../../lib/crypto/utils-legacy')
+
+  const data = Buffer.alloc(80)
+  data.writeInt32BE(1, 0)
+  data.write('A'.repeat(64), 4, 'ascii')
+  data.write('B'.repeat(8), 68, 'ascii')
+  data.writeInt32BE(4096, 76)
+
+  const hash = crypto.gaussdbSha256PasswordHash('user', 'password123', data)
+  assert.strictEqual(typeof hash, 'string')
+  assert.ok(/^[0-9a-f]+$/.test(hash), 'hash should be lowercase hex string: ' + hash)
+})
