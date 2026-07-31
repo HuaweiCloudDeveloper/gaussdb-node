@@ -501,7 +501,7 @@ suite.test('boolvector array: null passthrough', () => {
 
 suite.test('defaults.js registration: gaussdb type parsers loaded through defaults', () => {
   // This verifies the fix where defaults.js init callback uses correct parameter name
-  const defaults = require('../../../lib/defaults')
+  require('../../../lib/defaults')
   // INT1 (OID 5545) should have a parser registered
   const parser = pgTypes.getTypeParser(5545, 'text')
   assert.strictEqual(parser('42'), 42)

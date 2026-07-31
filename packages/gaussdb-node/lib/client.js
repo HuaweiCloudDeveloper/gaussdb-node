@@ -12,6 +12,7 @@ const Connection = require('./connection')
 const crypto = require('./crypto/utils')
 const HostChooser = require('./host-chooser')
 const HostStatusTracker = require('./host-status-tracker')
+const { clearTimeout } = require('timers')
 const HostStatus = HostStatusTracker.HostStatus
 
 class Client extends EventEmitter {
@@ -45,6 +46,8 @@ class Client extends EventEmitter {
     this._connected = false
     this._connectionError = false
     this._queryable = true
+    this._roleProbePending = false
+    this._skipDueToRole = false
 
     this.enableChannelBinding = Boolean(c.enableChannelBinding) // set true to use SCRAM-SHA-256-PLUS when offered
     this._connectionOptions = {
@@ -250,7 +253,10 @@ class Client extends EventEmitter {
         }
         this._connectionError = true
         lastError = err
-        HostStatusTracker.updateHostStatus(hostSpec, HostStatus.CONNECT_FAIL)
+        if (!this._skipDueToRole) {
+          HostStatusTracker.updateHostStatus(hostSpec, HostStatus.CONNECT_FAIL)
+        }
+        this._skipDueToRole = false
 
         if (this.connection && this.connection.stream) {
           this.connection.stream.destroy()
@@ -443,23 +449,50 @@ class Client extends EventEmitter {
       return
     }
     if (this._connecting) {
-      this._connecting = false
-      this._connected = true
-      clearTimeout(this.connectionTimeoutHandle)
-      this._connectErrorHandler = null
-
-      if (this._activeHostSpec) {
-        HostStatusTracker.updateHostStatus(this._activeHostSpec, HostStatus.CONNECT_OK)
+      const targetType = this.connectionParameters.targetServerType
+      if (targetType && targetType !== 'any' && !this._roleProbePending) {
+        if (this._activeHostSpec) {
+          HostStatusTracker.updateHostStatus(this._activeHostSpec, HostStatus.CONNECT_OK)
+        }
+        this._roleProbePending = true
+        this.query('SELECT pg_is_in_recovery() AS is_in_recovery', (err, result) => {
+          this._roleProbePending = false
+          if (err) {
+            this._skipToNextHostDuringConnect(err)
+            return
+          }
+          const isInRecovery = result && result.rows && result.rows[0] ? result.rows[0].is_in_recovery : null
+          const role =
+            isInRecovery === true || isInRecovery === 't'
+              ? HostStatus.SLAVE
+              : isInRecovery === false || isInRecovery === 'f'
+              ? HostStatus.MASTER
+              : null
+          if (role === null) {
+            this._skipToNextHostDuringConnect(new Error('Failed to determine server role: unexpected probe result'))
+            return
+          }
+          if (this._activeHostSpec) {
+            HostStatusTracker.updateHostStatus(this._activeHostSpec, role)
+          }
+          if (!this._isRoleAcceptable(role, targetType)) {
+            const hostLabel = this._activeHostSpec
+              ? `${this._activeHostSpec.host}:${this._activeHostSpec.port}`
+              : 'host'
+            this._skipToNextHostDuringConnect(
+              new Error(
+                `Host ${hostLabel} is ${
+                  role === HostStatus.MASTER ? 'primary' : 'standby'
+                }, does not satisfy targetServerType='${targetType}'`
+              )
+            )
+            return
+          }
+          this._finalizeConnectSuccess()
+        })
+      } else if (!this._roleProbePending) {
+        this._finalizeConnectSuccess()
       }
-
-      // process possible callback argument to Client#connect
-      if (this._connectionCallback) {
-        this._connectionCallback(null, this)
-        // remove callback for proper error handling
-        // after the connect event
-        this._connectionCallback = null
-      }
-      this.emit('connect')
     }
     const { activeQuery } = this
     this.activeQuery = null
@@ -470,12 +503,80 @@ class Client extends EventEmitter {
     this._pulseQueryQueue()
   }
 
+  _finalizeConnectSuccess() {
+    this._connecting = false
+    this._connected = true
+    clearTimeout(this.connectionTimeoutHandle)
+    this._connectErrorHandler = null
+
+    if (this._activeHostSpec && !this._roleProbePending) {
+      const targetType = this.connectionParameters.targetServerType
+      if (!targetType || targetType === 'any') {
+        HostStatusTracker.updateHostStatus(this._activeHostSpec, HostStatus.CONNECT_OK)
+      }
+    }
+
+    if (this._connectionCallback) {
+      this._connectionCallback(null, this)
+      this._connectionCallback = null
+    }
+    this.emit('connect')
+  }
+
+  _isRoleAcceptable(role, targetType) {
+    if (!targetType || targetType === 'any') {
+      return true
+    }
+    if (targetType === 'master') {
+      return role === HostStatus.MASTER
+    }
+    if (targetType === 'slave') {
+      return role === HostStatus.SLAVE
+    }
+    if (targetType === 'preferSlave') {
+      return role === HostStatus.SLAVE || role === HostStatus.MASTER
+    }
+    return true
+  }
+
+  _skipToNextHostDuringConnect(err) {
+    this._skipDueToRole = true
+    if (this.connection && this.connection.stream) {
+      this.connection.stream.destroy()
+    }
+    const handler = this._connectErrorHandler
+    if (handler) {
+      this._connecting = true
+      handler(err)
+    } else {
+      this._handleErrorWhileConnecting(err)
+    }
+  }
+
   // if we receieve an error event or error message
   // during the connection process we handle it here
   _handleErrorWhileConnecting(err) {
-    if (this._connectErrorHandler) {
-      return this._connectErrorHandler(err)
+    const errMsg = (err && err.message) || ''
+    if (
+      errMsg.includes('unsupported frontend protocol') &&
+      errMsg.includes('3.51') &&
+      !this._protocolFallbackAttempted
+    ) {
+      this._protocolFallbackAttempted = true
+      this._connectionError = false
+      const oldCon = this.connection
+      if (oldCon) {
+        oldCon.removeAllListeners()
+        if (oldCon.stream) {
+          oldCon.stream.destroy()
+        }
+      }
+      this.saslSession = null
+      this.connection = new Connection({ ...this._connectionOptions, protocolMinor: 0 })
+      this._startConnection()
+      return
     }
+
     if (this._connectionError) {
       // TODO(bmc): this is swallowing errors - we shouldn't do this
       return

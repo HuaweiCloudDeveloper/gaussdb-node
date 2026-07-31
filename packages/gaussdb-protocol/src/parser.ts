@@ -295,7 +295,7 @@ export class Parser {
       } else {
         const format = this._fieldFormats[i] || 'text'
         fields[i] = format === 'binary' ? this.reader.bytes(len) : this.reader.string(len)
-      }      
+      }
     }
     return new DataRowMessage(length, fields)
   }
@@ -341,9 +341,9 @@ export class Parser {
       // GaussDB uses authType=10 for SHA256 authentication
       // Postgres uses authType=10 for SASL/SCRAM authentication
       // Distinguish by checking if the first byte after authType is printable ASCII
-      case 10: 
+      case 10:
         {
-          const peekByte = this.reader.peekByte() 
+          const peekByte = this.reader.peekByte()
           if (peekByte >= 0x20 && peekByte <= 0x7e) {
             message.name = 'authenticationSASL'
             message.mechanisms = []

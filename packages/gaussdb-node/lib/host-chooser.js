@@ -57,6 +57,15 @@ class HostChooser {
 
     // Fallback to all hosts if no candidates available
     if (candidates.length === 0) {
+      if (
+        this.targetServerType === 'master' ||
+        this.targetServerType === 'slave' ||
+        this.targetServerType === 'preferSlave'
+      ) {
+        return this.hosts.filter((hostSpec) => {
+          return HostStatusTracker.isHostProbingCandidate(hostSpec, this.recheckMillis)
+        })
+      }
       return this.hosts.slice()
     }
 

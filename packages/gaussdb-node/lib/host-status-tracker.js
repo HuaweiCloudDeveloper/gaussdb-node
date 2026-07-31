@@ -132,7 +132,7 @@ class HostStatusTracker {
 
     // For targetServerType='master', only MASTER or CONNECT_OK is suitable
     if (targetServerType === 'master') {
-      return status === HostStatus.MASTER || status === HostStatus.CONNECT_OK
+      return status === HostStatus.MASTER
     }
 
     // For targetServerType='slave', only SLAVE is suitable
@@ -142,11 +142,22 @@ class HostStatusTracker {
 
     // For targetServerType='preferSlave', SLAVE is preferred, but MASTER/CONNECT_OK is acceptable
     if (targetServerType === 'preferSlave') {
-      return status === HostStatus.SLAVE || status === HostStatus.MASTER || status === HostStatus.CONNECT_OK
+      return status === HostStatus.SLAVE || status === HostStatus.MASTER
     }
 
     // Default: consider suitable
     return true
+  }
+
+  isHostProbingCandidate(hostSpec, recheckMillis) {
+    const entry = this.getHostStatus(hostSpec)
+    if (!entry || entry.isExpired(Date.now(), recheckMillis)) {
+      return true
+    }
+    if (entry.status === HostStatus.CONNECT_OK) {
+      return true
+    }
+    return false
   }
 
   /**

@@ -202,21 +202,24 @@ suite.testAsync('legacy gaussdbSha256PasswordHash: different tokens produce diff
   assert.notStrictEqual(hash1, hash2, 'different tokens should produce different hashes')
 })
 
-suite.testAsync('legacy gaussdbSha256PasswordHash: user parameter does not affect hash (RFC5802 ignores user)', async () => {
-  const crypto = require('../../../lib/crypto/utils-legacy')
+suite.testAsync(
+  'legacy gaussdbSha256PasswordHash: user parameter does not affect hash (RFC5802 ignores user)',
+  async () => {
+    const crypto = require('../../../lib/crypto/utils-legacy')
 
-  const data = Buffer.alloc(80)
-  data.writeInt32BE(1, 0)
-  data.write('A'.repeat(64), 4, 'ascii')
-  data.write('B'.repeat(8), 68, 'ascii')
-  data.writeInt32BE(1000, 76)
+    const data = Buffer.alloc(80)
+    data.writeInt32BE(1, 0)
+    data.write('A'.repeat(64), 4, 'ascii')
+    data.write('B'.repeat(8), 68, 'ascii')
+    data.writeInt32BE(1000, 76)
 
-  // gaussdbSha256PasswordHash signature is (user, password, data)
-  // but the RFC5802 implementation only uses password, not user
-  const hash1 = crypto.gaussdbSha256PasswordHash('userA', 'pass', data)
-  const hash2 = crypto.gaussdbSha256PasswordHash('userB', 'pass', data)
-  assert.strictEqual(hash1, hash2, 'user parameter should not affect hash output')
-})
+    // gaussdbSha256PasswordHash signature is (user, password, data)
+    // but the RFC5802 implementation only uses password, not user
+    const hash1 = crypto.gaussdbSha256PasswordHash('userA', 'pass', data)
+    const hash2 = crypto.gaussdbSha256PasswordHash('userB', 'pass', data)
+    assert.strictEqual(hash1, hash2, 'user parameter should not affect hash output')
+  }
+)
 
 suite.testAsync('legacy gaussdbSha256PasswordHash: result is ascii hex string', async () => {
   const crypto = require('../../../lib/crypto/utils-legacy')

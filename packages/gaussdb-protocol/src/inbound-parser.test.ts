@@ -636,8 +636,10 @@ describe('GaussDBPacketStream', function () {
       const rawBytes = Buffer.from([0xde, 0xad, 0xbe, 0xef])
       const dataRowBuf = new BufferList()
         .addInt16(2) // field count
-        .addInt32(5).add(Buffer.from('hello')) // text field
-        .addInt32(rawBytes.length).add(rawBytes) // binary field
+        .addInt32(5)
+        .add(Buffer.from('hello')) // text field
+        .addInt32(rawBytes.length)
+        .add(rawBytes) // binary field
         .join(true, 'D')
 
       const messages = await parseBuffers([rowDescBuf, dataRowBuf])
@@ -732,10 +734,7 @@ describe('GaussDBPacketStream', function () {
       shaData.write('D'.repeat(8), 68, 'ascii')
       shaData.writeInt32BE(2048, 76)
 
-      const shaBuf = new BufferList()
-        .addInt32(10)
-        .add(shaData)
-        .join(true, 'R')
+      const shaBuf = new BufferList().addInt32(10).add(shaData).join(true, 'R')
 
       const messages = await parseBuffers([shaBuf])
       const msg = messages[0] as any
